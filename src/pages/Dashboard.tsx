@@ -1,317 +1,361 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
-import ParkingSlot, { SlotStatus } from '@/components/ParkingSlot';
-import BookingForm, { BookingData } from '@/components/BookingForm';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from '@/components/ui/tabs';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Filter, Car, Clock, X, CheckCircle } from 'lucide-react';
+import { 
+  Calendar, 
+  Clock, 
+  Car, 
+  Package, 
+  ParkingMeter, 
+  AlertTriangle, 
+  X 
+} from 'lucide-react';
+import ParkingSlot, { SlotStatus } from '@/components/ParkingSlot';
+import BookingForm from '@/components/BookingForm';
 
-// Mock data types
-interface ParkingSlotData {
-  id: string;
-  name: string;
-  status: SlotStatus;
-  startTime?: string;
-  endTime?: string;
-  bookedBy?: string;
-}
-
-interface UserBooking {
+// Types
+interface Booking {
   id: string;
   slotId: string;
   slotName: string;
-  status: SlotStatus;
   startTime: string;
   endTime: string;
+  status: 'active' | 'completed' | 'overdue';
 }
 
 const Dashboard = () => {
   const { toast } = useToast();
-  const [slots, setSlots] = useState<ParkingSlotData[]>([]);
-  const [userBookings, setUserBookings] = useState<UserBooking[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [selectedSlot, setSelectedSlot] = useState<ParkingSlotData | null>(null);
-  const [isBooking, setIsBooking] = useState(false);
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'slots' | 'bookings'>('slots');
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  
+  // Mock data
+  const [parkingSlots, setParkingSlots] = useState<Array<{
+    id: string;
+    name: string;
+    status: SlotStatus;
+  }>>([]);
+  
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  
+  // Simulated auth check
+  useEffect(() => {
+    const isLoggedIn = localStorage.getItem('isLoggedIn');
+    
+    if (!isLoggedIn) {
+      navigate('/login');
+    }
+  }, [navigate]);
   
   // Load mock data
   useEffect(() => {
     // Simulate API call
     setTimeout(() => {
-      setSlots(mockSlots);
-      setUserBookings(mockUserBookings);
+      setParkingSlots([
+        { id: '1', name: 'A1', status: 'available' },
+        { id: '2', name: 'A2', status: 'occupied' },
+        { id: '3', name: 'A3', status: 'available' },
+        { id: '4', name: 'B1', status: 'maintenance' },
+        { id: '5', name: 'B2', status: 'available' },
+        { id: '6', name: 'B3', status: 'occupied' },
+        { id: '7', name: 'C1', status: 'available' },
+        { id: '8', name: 'C2', status: 'reserved' },
+        { id: '9', name: 'C3', status: 'available' },
+        { id: '10', name: 'D1', status: 'overdue' },
+        { id: '11', name: 'D2', status: 'available' },
+        { id: '12', name: 'D3', status: 'occupied' },
+      ]);
+      
+      setBookings([
+        {
+          id: 'booking-1',
+          slotId: '2',
+          slotName: 'A2',
+          startTime: '09:00 AM',
+          endTime: '11:00 AM',
+          status: 'active'
+        },
+        {
+          id: 'booking-2',
+          slotId: '10',
+          slotName: 'D1',
+          startTime: '02:00 PM',
+          endTime: '04:00 PM',
+          status: 'overdue'
+        }
+      ]);
+      
       setIsLoading(false);
-    }, 1000);
+    }, 1500);
   }, []);
   
-  // Filter slots based on search and status
-  const filteredSlots = slots.filter(slot => {
-    const matchesSearch = slot.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || slot.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-  
-  // Handle booking
-  const handleBookSlot = (slotId: string) => {
-    const slot = slots.find(s => s.id === slotId);
-    if (slot) {
-      setSelectedSlot(slot);
-      setIsBooking(true);
+  // Handle slot click
+  const handleSlotClick = (slotId: string) => {
+    // Find the clicked slot
+    const slot = parkingSlots.find(slot => slot.id === slotId);
+    
+    if (slot?.status === 'available') {
+      setSelectedSlot(slotId);
+      setIsBookingModalOpen(true);
+    } else if (slot?.status === 'occupied' || slot?.status === 'overdue') {
+      // Check if the current user has booked this slot
+      const booking = bookings.find(b => b.slotId === slotId);
+      if (booking) {
+        handleReleaseSlot(slotId, booking.id);
+      } else {
+        toast({
+          title: "Slot Occupied",
+          description: "This slot is currently occupied by another user.",
+        });
+      }
+    } else if (slot?.status === 'maintenance') {
+      toast({
+        title: "Slot in Maintenance",
+        description: "This slot is currently under maintenance.",
+        variant: "destructive",
+      });
     }
   };
   
-  // Complete booking
-  const handleCompleteBooking = (data: BookingData) => {
-    // In a real app, this would be an API call
-    if (!selectedSlot) return;
+  // Handle booking
+  const handleBookSlot = (slotId: string, startTime: string, endTime: string) => {
+    // Find the slot
+    const slot = parkingSlots.find(slot => slot.id === slotId);
     
-    // Format the time strings
-    const formattedStartTime = `${data.startDate.toLocaleDateString()} ${data.startTime}`;
-    const formattedEndTime = `${data.endDate.toLocaleDateString()} ${data.endTime}`;
-    
-    // Update slots
-    setSlots(prevSlots => 
-      prevSlots.map(slot => 
-        slot.id === data.slotId ? 
-        {
-          ...slot,
-          status: 'occupied',
-          startTime: formattedStartTime,
-          endTime: formattedEndTime,
-          bookedBy: 'currentUser' // In a real app, this would be the actual user ID
-        } : slot
-      )
-    );
-    
-    // Add to user bookings
-    const newBooking: UserBooking = {
-      id: `booking-${Date.now()}`,
-      slotId: data.slotId,
-      slotName: selectedSlot.name,
-      status: 'occupied',
-      startTime: formattedStartTime,
-      endTime: formattedEndTime
-    };
-    
-    setUserBookings(prev => [...prev, newBooking]);
-    
-    // Reset booking state
-    setIsBooking(false);
-    setSelectedSlot(null);
-    
-    // Show success toast
-    toast({
-      title: "Booking Successful",
-      description: `You've booked ${selectedSlot.name} from ${formattedStartTime} to ${formattedEndTime}`,
-    });
+    if (slot) {
+      // Update slot status
+      setParkingSlots(prevSlots => 
+        prevSlots.map(s => 
+          s.id === slotId ? { ...s, status: 'occupied' as SlotStatus } : s
+        )
+      );
+      
+      // Create a new booking
+      const newBooking: Booking = {
+        id: `booking-${Date.now()}`,
+        slotId,
+        slotName: slot.name,
+        startTime,
+        endTime,
+        status: 'active'
+      };
+      
+      setBookings(prevBookings => [...prevBookings, newBooking]);
+      
+      toast({
+        title: "Booking Successful",
+        description: `You have booked slot ${slot.name} from ${startTime} to ${endTime}.`,
+      });
+      
+      setIsBookingModalOpen(false);
+    }
   };
   
-  // Release slot
-  const handleReleaseSlot = (slotId: string) => {
-    // Update slots
-    setSlots(prevSlots => 
-      prevSlots.map(slot => 
-        slot.id === slotId ? 
-        {
-          ...slot,
-          status: 'available',
-          startTime: undefined,
-          endTime: undefined,
-          bookedBy: undefined
-        } : slot
+  // Handle releasing a slot
+  const handleReleaseSlot = (slotId: string, bookingId: string) => {
+    // Update slot status
+    setParkingSlots(prevSlots => 
+      prevSlots.map(s => 
+        s.id === slotId ? { ...s, status: 'available' as SlotStatus } : s
       )
     );
     
-    // Update user bookings
-    setUserBookings(prev => prev.filter(booking => booking.slotId !== slotId));
+    // Update booking status
+    setBookings(prevBookings => 
+      prevBookings.map(b => 
+        b.id === bookingId ? { ...b, status: 'completed' as const } : b
+      )
+    );
     
-    // Show success toast
     toast({
       title: "Slot Released",
-      description: "You've successfully released the parking slot.",
+      description: "You have successfully released the parking slot.",
     });
-  };
-  
-  const cancelBooking = () => {
-    setIsBooking(false);
-    setSelectedSlot(null);
   };
   
   return (
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto max-w-6xl px-4 md:px-6 pt-28 pb-16 page-animation">
-        <h1 className="text-3xl font-bold mb-8">Parking Dashboard</h1>
-        
-        <Tabs defaultValue="available" className="mb-8">
-          <TabsList className="mb-6">
-            <TabsTrigger value="available">Available Slots</TabsTrigger>
-            <TabsTrigger value="mybookings">My Bookings</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="available" className="space-y-6">
-            {/* Filters and Search */}
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Search slots..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              
-              <div className="flex gap-2 items-center">
-                <Filter className="text-muted-foreground h-4 w-4" />
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="occupied">Occupied</SelectItem>
-                    <SelectItem value="maintenance">Maintenance</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+      <main className="container mx-auto max-w-6xl px-4 pt-28 pb-16 page-animation">
+        <div className="space-y-6">
+          {/* Header Section */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">Dashboard</h1>
+              <p className="text-muted-foreground">
+                Book and manage your parking slots
+              </p>
             </div>
             
-            {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="bg-gray-100 animate-pulse h-48 rounded-lg"></div>
-                ))}
-              </div>
-            ) : isBooking ? (
-              <BookingForm 
-                slotId={selectedSlot?.id || ''} 
-                slotName={selectedSlot?.name || ''} 
-                onSubmit={handleCompleteBooking} 
-                onCancel={cancelBooking}
-              />
-            ) : (
-              <>
-                {filteredSlots.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredSlots.map(slot => (
-                      <ParkingSlot
-                        key={slot.id}
-                        id={slot.id}
-                        name={slot.name}
-                        status={slot.status}
-                        startTime={slot.startTime}
-                        endTime={slot.endTime}
-                        onBook={slot.status === 'available' ? handleBookSlot : undefined}
-                      />
+            <div className="flex gap-2">
+              <Button 
+                variant={activeTab === 'slots' ? 'default' : 'outline'} 
+                onClick={() => setActiveTab('slots')}
+                className="flex items-center gap-2"
+              >
+                <ParkingMeter className="h-4 w-4" />
+                Parking Slots
+              </Button>
+              <Button 
+                variant={activeTab === 'bookings' ? 'default' : 'outline'} 
+                onClick={() => setActiveTab('bookings')}
+                className="flex items-center gap-2"
+              >
+                <Calendar className="h-4 w-4" />
+                My Bookings
+              </Button>
+            </div>
+          </div>
+          
+          {/* Parking Slots Tab */}
+          {activeTab === 'slots' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Available Parking Slots</CardTitle>
+                <CardDescription>Select an available slot to book</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  // Loading Skeleton
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {[...Array(12)].map((_, i) => (
+                      <div key={i} className="h-28 bg-gray-100 animate-pulse rounded-lg"></div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-                      <Car className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <h3 className="text-lg font-medium mb-2">No slots found</h3>
-                    <p className="text-muted-foreground">
-                      Try adjusting your search or filter criteria
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {parkingSlots.map((slot) => (
+                      <ParkingSlot
+                        key={slot.id}
+                        name={slot.name}
+                        status={slot.status}
+                        onClick={() => handleSlotClick(slot.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter className="flex flex-col items-start text-sm text-muted-foreground">
+                <p className="flex items-center gap-2 mb-2">
+                  <span className="h-3 w-3 rounded-full bg-green-500"></span>
+                  Available: {parkingSlots.filter(s => s.status === 'available').length}
+                </p>
+                <p className="flex items-center gap-2 mb-2">
+                  <span className="h-3 w-3 rounded-full bg-blue-500"></span>
+                  Occupied: {parkingSlots.filter(s => s.status === 'occupied').length}
+                </p>
+                <p className="flex items-center gap-2 mb-2">
+                  <span className="h-3 w-3 rounded-full bg-yellow-500"></span>
+                  Maintenance: {parkingSlots.filter(s => s.status === 'maintenance').length}
+                </p>
+                <p className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-red-500"></span>
+                  Overdue: {parkingSlots.filter(s => s.status === 'overdue').length}
+                </p>
+              </CardFooter>
+            </Card>
+          )}
+          
+          {/* My Bookings Tab */}
+          {activeTab === 'bookings' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>My Bookings</CardTitle>
+                <CardDescription>Manage your active and past bookings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  // Loading Skeleton
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="h-24 bg-gray-100 animate-pulse rounded-lg"></div>
+                    ))}
+                  </div>
+                ) : bookings.length > 0 ? (
+                  <div className="space-y-4">
+                    {bookings.map((booking) => (
+                      <div 
+                        key={booking.id} 
+                        className={`border rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
+                          booking.status === 'overdue' ? 'border-red-300 bg-red-50' : 
+                          booking.status === 'active' ? 'border-blue-300 bg-blue-50' : 
+                          'border-green-300 bg-green-50'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="font-medium">
+                            Slot {booking.slotName}
+                          </div>
+                          <div className="text-sm text-muted-foreground flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            {booking.startTime} - {booking.endTime}
+                          </div>
+                          <div className="text-xs">
+                            <span className={`px-2 py-0.5 rounded-full font-medium ${
+                              booking.status === 'overdue' ? 'bg-red-200 text-red-800' : 
+                              booking.status === 'active' ? 'bg-blue-200 text-blue-800' : 
+                              'bg-green-200 text-green-800'
+                            }`}>
+                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {(booking.status === 'active' || booking.status === 'overdue') && (
+                          <Button 
+                            onClick={() => handleReleaseSlot(booking.slotId, booking.id)}
+                            variant={booking.status === 'overdue' ? 'destructive' : 'outline'}
+                            size="sm"
+                            className="flex items-center gap-2"
+                          >
+                            <X className="h-4 w-4" />
+                            Release Slot
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Car className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />
+                    <h3 className="text-lg font-medium">No bookings yet</h3>
+                    <p className="max-w-sm mx-auto mt-1">
+                      You haven't made any bookings. Go to the Parking Slots tab to book a slot.
                     </p>
                   </div>
                 )}
-              </>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="mybookings">
-            {userBookings.length > 0 ? (
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold">Your Active Bookings</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {userBookings.map(booking => {
-                    const slot = slots.find(s => s.id === booking.slotId);
-                    return slot ? (
-                      <ParkingSlot
-                        key={booking.id}
-                        id={slot.id}
-                        name={slot.name}
-                        status={slot.status}
-                        startTime={booking.startTime}
-                        endTime={booking.endTime}
-                        isUserSlot={true}
-                        onRelease={handleReleaseSlot}
-                      />
-                    ) : null;
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-16 bg-gray-50 rounded-lg">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-                  <Clock className="h-8 w-8 text-primary" />
-                </div>
-                <h3 className="text-xl font-medium mb-2">No active bookings</h3>
-                <p className="text-muted-foreground mb-6">
-                  You don't have any active parking slot bookings
-                </p>
-                <Button variant="outline" onClick={() => document.querySelector('button[value="available"]')?.click()}>
-                  Find Available Slots
-                </Button>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </main>
+      
+      {/* Booking Form Modal */}
+      <BookingForm 
+        isOpen={isBookingModalOpen} 
+        onClose={() => setIsBookingModalOpen(false)}
+        onSubmit={(startTime, endTime) => {
+          if (selectedSlot) {
+            handleBookSlot(selectedSlot, startTime, endTime);
+          }
+        }}
+      />
     </div>
   );
 };
-
-// Mock data
-const mockSlots: ParkingSlotData[] = [
-  { id: '1', name: 'Slot A1', status: 'available' },
-  { id: '2', name: 'Slot A2', status: 'occupied', startTime: '05/20/2023 09:00', endTime: '05/20/2023 11:00' },
-  { id: '3', name: 'Slot A3', status: 'available' },
-  { id: '4', name: 'Slot B1', status: 'maintenance' },
-  { id: '5', name: 'Slot B2', status: 'available' },
-  { id: '6', name: 'Slot B3', status: 'occupied', startTime: '05/20/2023 10:00', endTime: '05/20/2023 12:00' },
-  { id: '7', name: 'Slot C1', status: 'available' },
-  { id: '8', name: 'Slot C2', status: 'overdue', startTime: '05/19/2023 14:00', endTime: '05/19/2023 16:00' },
-  { id: '9', name: 'Slot C3', status: 'available' }
-];
-
-const mockUserBookings: UserBooking[] = [
-  { 
-    id: 'booking-1', 
-    slotId: '2', 
-    slotName: 'Slot A2', 
-    status: 'occupied',
-    startTime: '05/20/2023 09:00', 
-    endTime: '05/20/2023 11:00'
-  },
-  { 
-    id: 'booking-2', 
-    slotId: '8', 
-    slotName: 'Slot C2', 
-    status: 'overdue',
-    startTime: '05/19/2023 14:00', 
-    endTime: '05/19/2023 16:00'
-  }
-];
 
 export default Dashboard;

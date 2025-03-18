@@ -19,6 +19,7 @@ const Login = () => {
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   
   // Registration state
   const [registerName, setRegisterName] = useState('');
@@ -37,6 +38,16 @@ const Login = () => {
       
       // Simple validation
       if (loginEmail && loginPassword) {
+        // Store login state if "Remember me" is checked
+        if (rememberMe) {
+          localStorage.setItem('isLoggedIn', 'true');
+        } else {
+          // If not checked, we use sessionStorage which clears when browser is closed
+          sessionStorage.setItem('isLoggedIn', 'true');
+          // Remove from localStorage if it exists there
+          localStorage.removeItem('isLoggedIn');
+        }
+        
         toast({
           title: "Login Successful",
           description: "Welcome back to Parkify!",
@@ -80,6 +91,9 @@ const Login = () => {
         return;
       }
       
+      // Set as logged in (using session by default for new registrations)
+      sessionStorage.setItem('isLoggedIn', 'true');
+      
       toast({
         title: "Registration Successful",
         description: "Your account has been created!",
@@ -95,6 +109,10 @@ const Login = () => {
     // Simulate API request
     setTimeout(() => {
       setIsLoading(false);
+      
+      // For admin login, set as remembered by default
+      localStorage.setItem('isLoggedIn', 'true');
+      
       toast({
         title: "Admin Login Successful",
         description: "Welcome to the admin dashboard!",
@@ -190,10 +208,17 @@ const Login = () => {
                     </div>
                     
                     <div className="flex items-center space-x-2 my-4">
-                      <Checkbox id="remember" />
+                      <Checkbox 
+                        id="remember" 
+                        checked={rememberMe}
+                        onCheckedChange={(checked) => {
+                          setRememberMe(checked === true);
+                        }}
+                      />
                       <label
                         htmlFor="remember"
                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        onClick={() => setRememberMe(!rememberMe)}
                       >
                         Remember me
                       </label>
